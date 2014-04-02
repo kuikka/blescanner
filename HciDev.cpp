@@ -28,8 +28,19 @@
 
 namespace BLE {
 
-HciDev::HciDev(int devId, MainLoop *loop) : mDevId(devId), mSocket(NULL), mLoop(loop), mCurrentRequest(NULL)
+HciDev::HciDev(int devId, MainLoop *loop)
+	: mDevId(devId), mSocket(NULL), mLoop(loop),
+	  mCurrentRequest(NULL), mScanning(false), mConnecting(false)
 {
+	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+}
+
+HciDev::~HciDev()
+{
+	if (mScanning) {
+		leScanEnable(false, false);
+	}
+	delete mSocket;
 }
 
 bool HciDev::open()
@@ -48,10 +59,11 @@ bool HciDev::open()
 	memset(&addr, 0, sizeof(addr));
 	addr.hci_family = AF_BLUETOOTH;
 	addr.hci_dev = mDevId;
+	//addr.hci_channel = 0; // raw
 
 	ret = ::bind(fd, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0) {
-		std::cout << "Could not bind HCI socket: " << ::strerror(errno) << "\n";
+		std::cout << "Could not bind HCI socket: " << ::strerror(errno) << " " << mDevId << "\n";
 		::close(fd);
 		return false;
 	}
@@ -60,9 +72,24 @@ bool HciDev::open()
 	return true;
 }
 
-HciDev::~HciDev()
+bool HciDev::up()
 {
-	delete mSocket;
+	int ret = ::ioctl(mSocket->getFd(), HCIDEVUP, mDevId);
+	if (ret < 0) {
+		std::cout << "Could not bind HCI device " << mDevId << " up: " << ::strerror(errno) << "\n";
+		return false;
+	}
+	return true;
+}
+
+bool HciDev::down()
+{
+	int ret = ::ioctl(mSocket->getFd(), HCIDEVDOWN, mDevId);
+	if (ret < 0) {
+		std::cout << "Could not bind HCI device " << mDevId << " down: " << ::strerror(errno) << "\n";
+		return false;
+	}
+	return true;
 }
 
 bool HciDev::devInfo()
@@ -94,7 +121,7 @@ bool HciDev::devInfo()
 bool HciDev::leSetScanParameters(ScanType scanType,
 		uint16_t scanInterval,
 		uint16_t scanWindow,
-		AddressType ownAddressType,
+		BLEAddress::AddressType ownAddressType,
 		ScanningFilterPolicy filterPolicy)
 {
 
@@ -192,98 +219,127 @@ bool HciDev::onPollError()
 
 bool HciDev::readFromSocket()
 {
-//	std::cout << __PRETTY_FUNCTION__ << "\n";
+	//	std::cout << __PRETTY_FUNCTION__ << "\n";
 
 	unsigned char buf[HCI_MAX_EVENT_SIZE], *ptr;
-	hci_event_hdr *hdr;
 
 	int to = 10000;
 
-	evt_cmd_complete *cc;
-	evt_cmd_status *cs;
-//	evt_remote_name_req_complete *rn;
-	evt_le_meta_event *me;
-//	remote_name_req_cp *cp;
+	//	remote_name_req_cp *cp;
 	int len;
 
 	len = mSocket->read(buf, sizeof(buf), true);
 
-	hdr = (hci_event_hdr *) (buf + 1);
-	ptr = buf + (1 + sizeof(hci_event_hdr));
-	len -= (1 + sizeof(hci_event_hdr));
+	switch(buf[0])
+	{
+		case HCI_EVENT_PKT:
+		{
+			hci_event_hdr *hdr;
 
-	printf("Got HCI event, evt=0x%02x, plen=0x%02x buf[0]=0x%02x\n",
-			hdr->evt, hdr->plen, buf[0]);
-
-	switch (hdr->evt) {
-
-	case EVT_CMD_STATUS:
-		/*
-			   The Command Status event is used to indicate that the command described by
-				the Command_Opcode parameter has been received, and that the Controller
-				is currently performing the task for this command.
-		 */
-		cs = (evt_cmd_status *) ptr;
-		printf("Got EVT_CMD_STATUS, ncmd=0x%02x, opcode=0x%04x\n",
-				cs->ncmd, cs->opcode);
+			hdr = (hci_event_hdr *) (buf + 1);
+			ptr = buf + (1 + sizeof(hci_event_hdr));
+			len -= (1 + sizeof(hci_event_hdr));
 
 #if 0
-		if (cs->opcode != mOpcode)
-			continue;
-
-		if (mEvent != EVT_CMD_STATUS) {
-			if (cs->status) {
-				goto failed;
-			}
-			break;
-		}
-
-		memcpy(mReplyData, ptr, mReplyDataSize);
+			printf("Got HCI event, evt=0x%02x, plen=0x%02x buf[0]=0x%02x\n",
+					hdr->evt, hdr->plen, buf[0]);
 #endif
-		break;
 
-	case EVT_CMD_COMPLETE:
-		/* Command was completed */
-		cc = (evt_cmd_complete *) ptr;
+			switch (hdr->evt) {
 
-		printf("Got EVT_CMD_COMPLETE, ncmd=0x%02x, opcode=0x%04x\n",
-				cc->ncmd, cc->opcode);
+				case EVT_CMD_STATUS:
+				{
+					/*
+				   The Command Status event is used to indicate that the command described by
+					the Command_Opcode parameter has been received, and that the Controller
+					is currently performing the task for this command.
+					 */
+					evt_cmd_status *cs = (evt_cmd_status *) ptr;
+#if 0
+					printf("Got EVT_CMD_STATUS, status=0x%02x, ncmd=0x%02x, opcode=0x%04x\n",
+							cs->status, cs->ncmd, cs->opcode);
+#endif
+					onCommandStatus(cs->opcode, cs->status);
 
-		ptr += sizeof(evt_cmd_complete);
-		len -= sizeof(evt_cmd_complete);
+				}
+				break;
 
-		if (mCurrentRequest->getOpcode() == cc->opcode) {
-			completeCurrentRequest(ptr, len);
+				case EVT_CMD_COMPLETE:
+				{
+					/* Command was completed */
+					evt_cmd_complete *cc = (evt_cmd_complete *) ptr;
+
+#if 0
+					printf("Got EVT_CMD_COMPLETE, ncmd=0x%02x, opcode=0x%04x\n",
+							cc->ncmd, cc->opcode);
+#endif
+
+					ptr += sizeof(evt_cmd_complete);
+					len -= sizeof(evt_cmd_complete);
+
+					if (mCurrentRequest->getOpcode() == cc->opcode) {
+						printf("Completing current request\n");
+						completeCurrentRequest(ptr, len);
+					}
+					onCommandCompleted(cc->opcode, ptr, len);
+				}
+				break;
+
+				case EVT_DISCONN_COMPLETE:
+				{
+					evt_disconnection_complete *dis = (evt_disconnection_complete*) ptr;
+					onDisconnectionEvent(dis->status, dis->handle, dis->reason);
+				}
+				break;
+
+				case EVT_LE_META_EVENT:
+				{
+					/* LE meta event */
+					evt_le_meta_event *me = (evt_le_meta_event *) ptr;
+					len -= sizeof(*me);
+					printf("Got EVT_LE_META_EVENT subevent=0x%02x\n", me->subevent);
+					onLEMetaEvent(me->subevent, me->data, len);
+				}
+				break;
+
+				default:
+					printf("Got default\n");
+					break;
+			}
 		}
-
 		break;
 
-		#define EVT_LE_ADVERTISING_REPORT 0x02
-
-	case EVT_LE_META_EVENT:
-		/* LE meta event */
-		me = (evt_le_meta_event *) ptr;
-		len -= sizeof(*me);
-		printf("Got EVT_LE_META_EVENT subevent=0x%02x\n", me->subevent);
-		switch (me->subevent) {
-		case EVT_LE_ADVERTISING_REPORT:
-			handleAdvertisingReport(me->data, len);
-			break;
+		case HCI_COMMAND_PKT:
+		{
+			printf("Got HCI cmd\n");
 		}
-
-		break;
-
-	default:
-		printf("Got default\n");
 		break;
 	}
+
+
 }
 
 void HciDev::handleAdvertisingReport(const uint8_t *data, size_t len)
 {
-	if (mScanListener) {
+	printf("%s\n", __FUNCTION__);
 
-//		mScanListener->onAdvertisingReport(me[1]);
+	if (!mScanListener)
+		return;
+
+	unsigned num_reports = data[0];
+	const uint8_t *ptr = &data[1];
+
+	while (num_reports--) {
+		BLEScanListener::EventType type = (BLEScanListener::EventType) *ptr++;
+		BLEAddress::AddressType addrType = (BLEAddress::AddressType) *ptr++;
+		BLE::BLEAddress from(ptr, addrType);
+		ptr += 6;
+		size_t length = *ptr++;
+		const uint8_t *dataPtr = (const uint8_t *)ptr;
+		ptr += length;
+		int8_t rssi = (int8_t) *((int8_t*)ptr);
+
+		mScanListener->onAdvertisingReport(this, type, from, rssi, dataPtr, length);
 	}
 }
 
@@ -298,7 +354,102 @@ void HciDev::completeCurrentRequest(const uint8_t *ptr, size_t len)
 	}
 }
 
-bool HciDev::connect(BLEDevice *dev)
+bool HciDev::leConnect(BLEDevice *dev)
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_CREATE_CONN);
+
+	le_create_connection conn;
+
+	::memset(&conn, 0, sizeof(conn));
+
+	conn.scan_interval = 4;
+	conn.scan_window = 4;
+	conn.min_interval = 0x000F;
+	conn.max_interval = 0x000F;
+	conn.supervision_timeout = 0xc80;
+	conn.min_ce_length = 1;
+	conn.max_ce_length = 1;
+	::memcpy(&conn.peer_bdaddr.b, &dev->getAddress().address.b, 6);
+	conn.peer_bdaddr_type = dev->getAddress().type;
+
+	req->setCmdData(&conn, sizeof(conn));
+	req->setExpectedReplyLength(1);
+
+	submit(req);
+}
+
+bool HciDev::leDisconnect(BLEDevice *bleDev)
+{
+	HciRequest *req = new HciRequest(HCI_OP_DISCONNECT);
+
+	hci_disconnect dis;
+	::memset(&dis, 0, sizeof(dis));
+	dis.handle = bleDev->getConnectionHandle();
+	dis.reason = 0x13;
+	req->setCmdData(&dis, sizeof(dis));
+
+	submit(req);
+}
+
+
+bool HciDev::leCancelConnection()
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_CREATE_CONN_CANCEL);
+	submit(req);
+}
+
+void HciDev::onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t dataLen)
+{
+
+}
+
+void HciDev::onCommandStatus(uint16_t opCode, uint8_t status)
+{
+
+}
+
+void HciDev::onDisconnectionEvent(uint8_t status, uint16_t handle, uint8_t reason)
+{
+	printf("Handle %d disconnected\n", handle);
+}
+
+void HciDev::onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen)
+{
+	switch (subEvent) {
+
+		case EVT_LE_CONNECTION_COMPLETE:
+		{
+			evt_le_connection_complete *c = (evt_le_connection_complete*) data;
+			BLEAddress addr(c->peer_bdaddr, (BLEAddress::AddressType) c->peer_bdaddr_type);
+
+			for (DeviceMap::iterator i = mDevices.begin();
+					i != mDevices.end();
+					++i)
+			{
+				BLEDevice *dev = *i;
+				if (dev->getAddress() == addr) {
+					dev->onConnection(c->status, c->handle);
+				}
+			}
+
+			break;
+		}
+
+		case EVT_LE_ADVERTISING_REPORT:
+		{
+			handleAdvertisingReport(data, datalen);
+			break;
+		}
+
+	}
+}
+
+void HciDev::addDevice(BLEDevice *dev)
+{
+	mDevices.insert(dev);
+}
+
+void HciDev::removeDevice(BLEDevice *dev)
 {
 
 }

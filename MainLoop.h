@@ -9,6 +9,7 @@
 #define MAINLOOP_H_
 
 #include <map>
+#include <stdint.h>
 class Socket;
 
 class TimeoutCallback

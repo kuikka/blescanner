@@ -16,13 +16,11 @@
 
 MainLoop::MainLoop()
 {
-	// TODO Auto-generated constructor stub
-
+	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
 }
 
 MainLoop::~MainLoop()
 {
-	// TODO Auto-generated destructor stub
 }
 
 bool MainLoop::run()
@@ -135,4 +133,9 @@ bool MainLoop::notifyLoop()
 	if (ret != 1)
 		return false;
 	return true;
+}
+
+ bool MainLoop::setTimeout(uint32_t timeoutMs, TimeoutCallback *cb)
+{
+
 }

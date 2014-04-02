@@ -1,7 +1,10 @@
-SRC_CXX := blescanner.cpp HciDev.cpp Socket.cpp HciRequest.cpp MainLoop.cpp HciSocket.cpp BLEAddress.cpp BLEDevice.cpp
+SRC_CXX := blescanner.cpp HciDev.cpp Socket.cpp \
+		HciRequest.cpp MainLoop.cpp HciSocket.cpp \
+		BLEAddress.cpp BLEDevice.cpp L2CAPSocket.cpp \
+		BLEGATT.cpp
 OBJ = $(SRC_CXX:.cpp=.o)
 #CXXFLAGS=-std=c++0x
-CXXFLAGS=-W
+CXXFLAGS=-W -g
 
 blescanner: $(OBJ)
 	$(CXX) -o $@ $^

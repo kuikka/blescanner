@@ -32,11 +32,14 @@
 #define HCI_OP_LE_SET_SCAN_PARAMETERS	0x200B
 #define HCI_OP_LE_SET_SCAN_ENABLE		0x200C
 #define HCI_OP_LE_CREATE_CONN			0x200D
+#define HCI_OP_LE_CREATE_CONN_CANCEL	0x200E
+#define HCI_OP_DISCONNECT				0x0006
 
 #define HCI_MAX_EVENT_SIZE	260 // 255 + 4 + 1
 #define HCI_COMMAND_PKT 1
 #define HCI_EVENT_PKT	4
 
+#define EVT_DISCONN_COMPLETE	0x05
 #define EVT_CMD_STATUS			0x0F
 #define EVT_CMD_COMPLETE		0x0E
 #define EVT_LE_META_EVENT		0x3E
@@ -50,6 +53,7 @@ typedef struct {
 } __attribute__ ((packed)) hci_cmd;
 
 typedef struct {
+	// Little-endian!
 	uint8_t b[6];
 } __attribute__((packed)) bdaddr_t;
 
@@ -113,9 +117,35 @@ typedef struct {
 } __attribute__ ((packed)) evt_cmd_status;
 
 typedef struct {
+	uint8_t		status;
+	uint16_t	handle;
+	uint8_t		reason;
+} __attribute__ ((packed)) evt_disconnection_complete;
+
+typedef struct {
 	uint8_t		subevent;
 	uint8_t		data[0];
 } __attribute__ ((packed)) evt_le_meta_event;
+
+
+// LE meta events
+#define EVT_LE_CONNECTION_COMPLETE	0x01
+
+typedef struct {
+	uint8_t		status;
+	uint16_t	handle;
+	uint8_t		role;
+	uint8_t		peer_bdaddr_type;
+	bdaddr_t	peer_bdaddr;
+	uint16_t	conn_interval;
+	uint16_t	conn_latency;
+	uint16_t	supervision_timeout;
+	uint8_t		master_clock_accuracy;
+} __attribute__ ((packed)) evt_le_connection_complete;
+
+#define EVT_LE_ADVERTISING_REPORT	0x02
+
+
 
 struct hci_filter {
 	uint32_t type_mask;
@@ -154,6 +184,11 @@ typedef struct {
 	uint16_t	min_ce_length;
 	uint16_t	max_ce_length;
 } __attribute__ ((packed)) le_create_connection;
+
+typedef struct {
+	uint16_t	handle;
+	uint8_t		reason;
+} __attribute__ ((packed)) hci_disconnect;
 
 
 #endif /* HCI_H_ */

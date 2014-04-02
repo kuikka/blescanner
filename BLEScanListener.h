@@ -11,6 +11,9 @@
 #include "BLEAddress.h"
 
 namespace BLE {
+
+class HciDev;
+
 class BLEScanListener
 {
 public:
@@ -23,7 +26,8 @@ public:
 	} EventType;
 
 public:
-	virtual void onAdvertisingReport(EventType type,
+	virtual void onAdvertisingReport(HciDev *hciDev,
+			EventType type,
 			BLE::BLEAddress from,
 			int8_t rssi,
 			const uint8_t *data,

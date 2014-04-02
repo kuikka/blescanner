@@ -13,6 +13,7 @@
 #include "BLEScanListener.h"
 #include "HciRequest.h"
 #include <queue>
+#include <set>
 
 class MainLoop;
 
@@ -29,11 +30,6 @@ public:
 	} ScanType;
 
 	typedef enum {
-		PUBLIC,
-		PRIVATE,
-	} AddressType;
-
-	typedef enum {
 		ALL,
 		WHITELIST_ONLY,
 	} ScanningFilterPolicy;
@@ -43,19 +39,29 @@ public:
 	virtual ~HciDev();
 	bool devInfo();
 	HciSocket* getSocket();
+	MainLoop* getMainLoop() { return mLoop; };
 
 public:
 	bool leSetScanParameters(ScanType scanType,
 			uint16_t scanInterval,
 			uint16_t scanWindow,
-			AddressType ownAddressType,
+			BLEAddress::AddressType ownAddressType,
 			ScanningFilterPolicy filterPolicy);
 
 	bool leScanEnable(bool enable, bool filterDuplicates);
 
+	bool leConnect(BLEDevice *dev);
+	bool leDisconnect(BLEDevice *bleDev);
+	bool leCancelConnection();
+
+public:
 	void setScanListener(BLEScanListener *listener);
 	bool open();
-	bool connect(BLEDevice *dev);
+	bool up();
+	bool down();
+	void addDevice(BLEDevice *dev);
+	void removeDevice(BLEDevice *dev);
+	bool disconnect(BLEDevice *bleDev = NULL);
 
 
 
@@ -72,6 +78,10 @@ protected:
 	void completeCurrentRequest(const uint8_t *ptr, size_t len);
 	void handleAdvertisingReport(const uint8_t *data, size_t len);
 
+	void onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t dataLen);
+	void onCommandStatus(uint16_t opCode, uint8_t status);
+	void onDisconnectionEvent(uint8_t status, uint16_t handle, uint8_t reason);
+	void onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen);
 
 
 protected:
@@ -81,7 +91,11 @@ protected:
 	MainLoop *mLoop;
 	typedef std::queue<HciRequest*> RequestQueue;
 	RequestQueue mRequestQueue;
+	typedef std::set<BLEDevice*> DeviceMap;
+	DeviceMap mDevices;
 	HciRequest *mCurrentRequest;
+	bool mScanning;
+	bool mConnecting;
 
 	friend class HciSocket;
 };
