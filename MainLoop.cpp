@@ -116,11 +116,13 @@ bool MainLoop::run()
 
 bool MainLoop::addSocket(Socket *sock)
 {
+	std::cout << __PRETTY_FUNCTION__ << " " << sock->getFd() << "\n";
 	mSockets[sock->getFd()] = sock;
 }
 
 bool MainLoop::removeSocket(Socket *sock)
 {
+	std::cout << __PRETTY_FUNCTION__ << " " << sock->getFd() << "\n";
 	mSockets.erase(sock->getFd());
 }
 

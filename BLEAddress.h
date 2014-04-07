@@ -8,6 +8,9 @@
 #ifndef BLEADDRESS_H_
 #define BLEADDRESS_H_
 
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <stdint.h>
 #include <string.h>
 #include <functional>
@@ -64,22 +67,43 @@ public:
 	};
 };
 
+inline bool operator<(const BLEAddress &l, const BLEAddress &r)
+{
+	int c = ::memcmp(l.address.b, r.address.b, sizeof(l.address.b));
+	if (c < 0) {
+		return true;
+	}
+	else if (c > 0) {
+		return false;
+	}
+	else if (c == 0) {
+		return l.type < r.type;
+	}
+	return false; // not reached
+}
+
 struct  BLEAddressLessThan : public std::less<BLEAddress>
 {
 	bool operator()(const BLEAddress &l, const BLEAddress &r) const
 	{
-		int c = ::memcmp(l.address.b, r.address.b, sizeof(l.address.b));
-		if (c < 0) {
-			return true;
-		}
-		else if (c > 0) {
-			return false;
-		}
-		else if (c == 0) {
-			return l.type < r.type;
-		}
+		return l < r;
 	};
 };
+
+
+inline std::ostream& operator<<(std::ostream& os, const BLEAddress &addr)
+{
+	std::stringstream ss;
+	ss << std::hex << std::setw(2) << std::setfill('0');
+	for (int i = 5; i >= 0; i--) {
+		ss << (unsigned)addr.address.b[i];
+		ss << ":";
+	}
+	os << ss.str();
+	os << " ";
+	os << (addr.type == BLE::BLEAddress::PUBLIC ? "Public" : "Random");
+	return os;
+}
 
 } /* namespace BLE */
 

@@ -17,6 +17,13 @@ namespace BLE {
 class BLEDevice
 {
 public:
+	typedef enum {
+		DISCONNECTED,
+		CONNECTING,
+		CONNECTED,
+		DISCONNECTING,
+	} DeviceState;
+public:
 	BLEDevice();
 	BLEDevice(HciDev *hciDev, const BLEAddress& bdaddr);
 	virtual ~BLEDevice();
@@ -26,8 +33,10 @@ public:
 	bool disconnect();
 
 	bool onConnection(uint8_t status, uint16_t handle);
-	bool onDisonnection(uint8_t reason);
+	bool onDisconnection(uint8_t status, uint8_t reason);
 	uint16_t getConnectionHandle();
+
+	DeviceState getState();
 
 protected:
 	HciDev *mHciDev;
@@ -35,6 +44,7 @@ protected:
 	bool mConnected;
 	uint16_t mHandle;
 	BLEGATT mGatt;
+	DeviceState mState;
 };
 
 } /* namespace BLE */

@@ -29,8 +29,8 @@
 namespace BLE {
 
 HciDev::HciDev(int devId, MainLoop *loop)
-	: mDevId(devId), mSocket(NULL), mLoop(loop),
-	  mCurrentRequest(NULL), mScanning(false), mConnecting(false)
+: mDevId(devId), mSocket(NULL), mLoop(loop),
+  mCurrentRequest(NULL), mScanning(false), mConnecting(false), mWhiteListSize(0)
 {
 	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
 }
@@ -69,6 +69,8 @@ bool HciDev::open()
 	}
 	mSocket = new HciSocket(fd, mLoop, this);
 	mSocket->setFilter();
+	leReadBufferSize();
+	leReadWhiteListSize();
 	return true;
 }
 
@@ -144,7 +146,21 @@ bool HciDev::leSetScanParameters(ScanType scanType,
 	req->setCmdData(&params, sizeof(params));
 	req->setExpectedReplyLength(1);
 
-	submit(req);
+	return submit(req);
+}
+
+bool HciDev::leAddToWhitelist(const BLEAddress &addr)
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_ADD_TO_WHITE_LIST);
+
+	le_add_to_white_list data;
+	memset(&data, 0, sizeof(data));
+
+	data.peer_bdaddr_type = addr.type;
+	data.peer_bdaddr = addr.address;
+	req->setCmdData(&data, sizeof(data));
+
+	return submit(req);
 }
 
 bool HciDev::leScanEnable(bool enable, bool filterDuplicates)
@@ -163,7 +179,8 @@ bool HciDev::leScanEnable(bool enable, bool filterDuplicates)
 	req->setCmdData(&params, sizeof(params));
 	req->setExpectedReplyLength(1);
 
-	submit(req);
+	mScanning = enable;
+	return submit(req);
 }
 
 HciSocket* HciDev::getSocket()
@@ -178,13 +195,16 @@ void HciDev::setScanListener(BLEScanListener *listener)
 
 bool HciDev::submit(HciRequest *req)
 {
-	std::cout << __PRETTY_FUNCTION__ << "\n";
+	printf("HciDev: submitted 0x%04x. Queue size before: %lu. Current request = %p\n", req->getOpcode(),
+			mRequestQueue.size(), mCurrentRequest);
+
 	mRequestQueue.push(req);
 
 	if (mCurrentRequest == NULL) {
 		mCurrentRequest = mRequestQueue.front();
 		mRequestQueue.pop();
 	}
+	return true;
 }
 
 // HciSocket functions
@@ -193,6 +213,7 @@ bool HciDev::wantToWrite()
 {
 	if (mCurrentRequest)
 		return mCurrentRequest->wantToWrite();
+	return false;
 }
 
 bool HciDev::wantToRead()
@@ -202,19 +223,18 @@ bool HciDev::wantToRead()
 
 bool HciDev::onPollIn()
 {
-	readFromSocket();
+	return readFromSocket();
 }
 
 bool HciDev::onPollOut()
 {
-	mCurrentRequest->writeToSocket(mSocket);
-
+	return mCurrentRequest->writeToSocket(mSocket);
 }
 
 bool HciDev::onPollError()
 {
 	std::cout << __PRETTY_FUNCTION__ << "\n";
-
+	return false;
 }
 
 bool HciDev::readFromSocket()
@@ -277,8 +297,8 @@ bool HciDev::readFromSocket()
 					ptr += sizeof(evt_cmd_complete);
 					len -= sizeof(evt_cmd_complete);
 
-					if (mCurrentRequest->getOpcode() == cc->opcode) {
-						printf("Completing current request\n");
+					if (mCurrentRequest && mCurrentRequest->getOpcode() == cc->opcode) {
+						printf("Completing current request 0x%04x\n", cc->opcode);
 						completeCurrentRequest(ptr, len);
 					}
 					onCommandCompleted(cc->opcode, ptr, len);
@@ -297,13 +317,13 @@ bool HciDev::readFromSocket()
 					/* LE meta event */
 					evt_le_meta_event *me = (evt_le_meta_event *) ptr;
 					len -= sizeof(*me);
-					printf("Got EVT_LE_META_EVENT subevent=0x%02x\n", me->subevent);
+//					printf("Got EVT_LE_META_EVENT subevent=0x%02x\n", me->subevent);
 					onLEMetaEvent(me->subevent, me->data, len);
 				}
 				break;
 
 				default:
-					printf("Got default\n");
+///					printf("Got default\n");
 					break;
 			}
 		}
@@ -311,17 +331,17 @@ bool HciDev::readFromSocket()
 
 		case HCI_COMMAND_PKT:
 		{
-			printf("Got HCI cmd\n");
+			//printf("Got HCI cmd\n");
 		}
 		break;
 	}
-
+	return true;
 
 }
 
 void HciDev::handleAdvertisingReport(const uint8_t *data, size_t len)
 {
-	printf("%s\n", __FUNCTION__);
+//	printf("%s\n", __FUNCTION__);
 
 	if (!mScanListener)
 		return;
@@ -354,7 +374,7 @@ void HciDev::completeCurrentRequest(const uint8_t *ptr, size_t len)
 	}
 }
 
-bool HciDev::leConnect(BLEDevice *dev)
+bool HciDev::leConnect(BLEDevice *dev, bool useWhiteList)
 {
 	HciRequest *req = new HciRequest(HCI_OP_LE_CREATE_CONN);
 
@@ -369,13 +389,27 @@ bool HciDev::leConnect(BLEDevice *dev)
 	conn.supervision_timeout = 0xc80;
 	conn.min_ce_length = 1;
 	conn.max_ce_length = 1;
-	::memcpy(&conn.peer_bdaddr.b, &dev->getAddress().address.b, 6);
-	conn.peer_bdaddr_type = dev->getAddress().type;
+	if (useWhiteList) {
+		conn.initiator_filter = 1;
+	} else {
+		::memcpy(&conn.peer_bdaddr.b, &dev->getAddress().address.b, 6);
+		conn.peer_bdaddr_type = dev->getAddress().type;
+	}
 
 	req->setCmdData(&conn, sizeof(conn));
 	req->setExpectedReplyLength(1);
 
-	submit(req);
+	return submit(req);
+}
+
+bool HciDev::leConnectViaWhiteList(BLEDevice *dev)
+{
+	if (mConnecting) {
+		leCancelConnection();
+	}
+	leAddToWhitelist(dev->getAddress());
+	leConnect(NULL, true);
+
 }
 
 bool HciDev::leDisconnect(BLEDevice *bleDev)
@@ -388,29 +422,80 @@ bool HciDev::leDisconnect(BLEDevice *bleDev)
 	dis.reason = 0x13;
 	req->setCmdData(&dis, sizeof(dis));
 
-	submit(req);
+	return submit(req);
 }
 
 
 bool HciDev::leCancelConnection()
 {
 	HciRequest *req = new HciRequest(HCI_OP_LE_CREATE_CONN_CANCEL);
-	submit(req);
+	return submit(req);
+}
+
+bool HciDev::leReadBufferSize()
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_READ_BUFFER_SIZE);
+	return submit(req);
+}
+
+bool HciDev::leReadWhiteListSize()
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_READ_WHITE_LIST_SIZE);
+	return submit(req);
+}
+
+bool HciDev::leClearWhiteList()
+{
+	HciRequest *req = new HciRequest(HCI_OP_LE_CLEAR_WHITE_LIST);
+	return submit(req);
+
 }
 
 void HciDev::onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t dataLen)
 {
-
+//	std::cout << "Command completed: " << opCode << "\n";
+	switch (opCode) {
+		case HCI_OP_LE_READ_BUFFER_SIZE:
+		{
+			le_read_buffer_size *bs = (le_read_buffer_size*) data;
+			std::cout << "Got LE buffer size, data_packet_len=" << bs->data_packet_len << " num_data_packets=" << (unsigned)bs->nr_data_packets << "\n";
+		}
+		break;
+		case HCI_OP_LE_READ_WHITE_LIST_SIZE:
+		{
+			le_read_white_list_size *wlz = (le_read_white_list_size*) data;
+			std::cout << "Got LE white list size, white_list_size=" << (unsigned)wlz->list_size << "\n";
+			mWhiteListSize = wlz->list_size;
+		}
+		break;
+		case HCI_OP_LE_CLEAR_WHITE_LIST:
+		{
+			std::cout << "White list cleared\n";
+		}
+		break;
+		case HCI_OP_LE_ADD_TO_WHITE_LIST:
+		{
+			std::cout << "Added to white list\n";
+		}
+		break;
+	}
 }
 
 void HciDev::onCommandStatus(uint16_t opCode, uint8_t status)
 {
-
+	if (opCode == HCI_OP_LE_CREATE_CONN) {
+		if (mCurrentRequest && mCurrentRequest->getOpcode() == opCode)
+			completeCurrentRequest(&status, 1);
+	}
 }
 
 void HciDev::onDisconnectionEvent(uint8_t status, uint16_t handle, uint8_t reason)
 {
 	printf("Handle %d disconnected\n", handle);
+	BLEDevice *dev = findDeviceByHandle(handle);
+	if (dev)
+		dev->onDisconnection(status, reason);
+
 }
 
 void HciDev::onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen)
@@ -422,15 +507,10 @@ void HciDev::onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen
 			evt_le_connection_complete *c = (evt_le_connection_complete*) data;
 			BLEAddress addr(c->peer_bdaddr, (BLEAddress::AddressType) c->peer_bdaddr_type);
 
-			for (DeviceMap::iterator i = mDevices.begin();
-					i != mDevices.end();
-					++i)
-			{
-				BLEDevice *dev = *i;
-				if (dev->getAddress() == addr) {
-					dev->onConnection(c->status, c->handle);
-				}
-			}
+			std::cout << "EVT: Connection completed: " << addr << "\n";
+			BLEDevice *dev = findDeviceByAddress(addr);
+			if (dev)
+				dev->onConnection(c->status, c->handle);
 
 			break;
 		}
@@ -454,4 +534,31 @@ void HciDev::removeDevice(BLEDevice *dev)
 
 }
 
+BLEDevice* HciDev::findDeviceByHandle(uint16_t handle)
+{
+	for (DeviceMap::iterator i = mDevices.begin();
+			i != mDevices.end();
+			++i)
+	{
+		BLEDevice *dev = *i;
+		if (dev->getConnectionHandle() == handle) {
+			return dev;
+		}
+	}
+	return NULL;
+}
+
+BLEDevice* HciDev::findDeviceByAddress(const BLEAddress &addr)
+{
+	for (DeviceMap::iterator i = mDevices.begin();
+			i != mDevices.end();
+			++i)
+	{
+		BLEDevice *dev = *i;
+		if (dev->getAddress() == addr) {
+			return dev;
+		}
+	}
+	return NULL;
+}
 }; // namespace BLE

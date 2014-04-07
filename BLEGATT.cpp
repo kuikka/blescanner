@@ -6,7 +6,9 @@
  */
 
 #include <stdio.h>
+#include "BLEDevice.h"
 #include "BLEGATT.h"
+#include "ByteBuffer.h"
 
 #define ATT_OP_ERROR			0x01
 #define ATT_OP_MTU_REQ			0x02
@@ -40,9 +42,9 @@
 
 namespace BLE {
 
-BLEGATT::BLEGATT(BLEDevice *dev) : mDev(dev), mL2CAP(dev)
+BLEGATT::BLEGATT(BLEDevice *dev) : mDev(dev), mL2CAP(this, dev->getHciDev()->getMainLoop()), mDiscovering(false)
 {
-	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+//	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
 }
 
 BLEGATT::~BLEGATT()
@@ -51,22 +53,89 @@ BLEGATT::~BLEGATT()
 
 bool BLEGATT::connect()
 {
-	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
-	mL2CAP.connect();
+//	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+	return mL2CAP.connect(mDev->getAddress());
+}
+
+bool BLEGATT::disconnect()
+{
+//	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+	return mL2CAP.close();
 }
 
 bool BLEGATT::discoverAll()
 {
-	uint8_t buf[7];
-	buf[0] = ATT_OP_READ_BY_GROUP_REQ;
+	mDiscovering = true;
+
+	return opReadByGroupReq(0x0001, 0xFFFF, UUID(0x2800));
+}
+
+bool BLEGATT::opReadByGroupReq(uint16_t startHandle, uint16_t endHandle, const UUID & uuid)
+{
+	ByteBuffer bb(21); // Max
+	bb.put((uint8_t)ATT_OP_READ_BY_GROUP_REQ);
+	bb.put(startHandle);
+	bb.put(endHandle);
+	bb.put(uuid);
+#if 0
 	buf[1] = 0x01;
 	buf[2] = 0x00;
 	buf[3] = 0xFF;
 	buf[4] = 0xFF;
 	buf[5] = 0x00;
 	buf[6] = 0x28;
+	return mL2CAP.write(buf, sizeof(buf));
+#endif
+	return bb.write(&mL2CAP);
+}
 
-	mL2CAP.write(buf, sizeof(buf));
+#define GATT_MTU 23
+
+void BLEGATT::readFromSocket()
+{
+	uint8_t buf[GATT_MTU];
+
+	int ret = mL2CAP.read(buf, sizeof(buf), true);
+	if (ret <= 0)
+			return ;
+
+	ByteBuffer bb(buf, sizeof(buf));
+
+	std::cout << "GATT: Got " << ret << " bytes\n";
+
+	uint8_t opcode = bb.get8();
+	switch (opcode) {
+		case ATT_OP_READ_BY_GROUP_RESP:
+			std::cout << "Read by group response\n";
+			uint8_t length = bb.get8();
+			std::cout << "  Got attributes, length=" << (int)length << "\n";
+			if (length == 6) {
+				unsigned nr_data = ((ret - 2) / length);
+				while (nr_data--) {
+					printf("    Attribute handle 0x%04x\n", bb.get16());
+					printf("    End handle 0x%04x\n", bb.get16());
+					printf("    Value 0x%04x\n", bb.get16());
+				}
+			}
+			break;
+
+	}
+
+}
+
+bool BLEGATT::onPollIn()
+{
+	readFromSocket();
+}
+
+bool BLEGATT::onPollOut()
+{
+
+}
+
+bool BLEGATT::wantToWrite()
+{
+
 }
 
 } /* namespace BLE */

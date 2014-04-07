@@ -50,9 +50,15 @@ public:
 
 	bool leScanEnable(bool enable, bool filterDuplicates);
 
-	bool leConnect(BLEDevice *dev);
+	bool leConnect(BLEDevice *dev = NULL, bool useWhiteList = false);
 	bool leDisconnect(BLEDevice *bleDev);
 	bool leCancelConnection();
+	bool leAddToWhitelist();
+	bool leReadBufferSize();
+	bool leReadWhiteListSize();
+	bool leClearWhiteList();
+	bool leAddToWhitelist(const BLEAddress &addr);
+	bool leConnectViaWhiteList(BLEDevice *dev);
 
 public:
 	void setScanListener(BLEScanListener *listener);
@@ -83,6 +89,13 @@ protected:
 	void onDisconnectionEvent(uint8_t status, uint16_t handle, uint8_t reason);
 	void onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen);
 
+	BLEDevice* findDeviceByHandle(uint16_t handle);
+
+public:
+	BLEDevice* findDeviceByAddress(const BLEAddress &addr);
+
+
+
 
 protected:
 	HciSocket *mSocket;
@@ -96,6 +109,7 @@ protected:
 	HciRequest *mCurrentRequest;
 	bool mScanning;
 	bool mConnecting;
+	unsigned mWhiteListSize;
 
 	friend class HciSocket;
 };

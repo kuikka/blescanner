@@ -29,10 +29,14 @@
 
 #define SOL_BLUETOOTH	274
 
+#define HCI_OP_LE_READ_BUFFER_SIZE		0x2002
 #define HCI_OP_LE_SET_SCAN_PARAMETERS	0x200B
 #define HCI_OP_LE_SET_SCAN_ENABLE		0x200C
 #define HCI_OP_LE_CREATE_CONN			0x200D
 #define HCI_OP_LE_CREATE_CONN_CANCEL	0x200E
+#define HCI_OP_LE_READ_WHITE_LIST_SIZE	0x200F
+#define HCI_OP_LE_CLEAR_WHITE_LIST		0x2010
+#define HCI_OP_LE_ADD_TO_WHITE_LIST		0x2011
 #define HCI_OP_DISCONNECT				0x0006
 
 #define HCI_MAX_EVENT_SIZE	260 // 255 + 4 + 1
@@ -186,9 +190,24 @@ typedef struct {
 } __attribute__ ((packed)) le_create_connection;
 
 typedef struct {
+	uint8_t		status;
+	uint16_t	data_packet_len;
+	uint8_t		nr_data_packets;
+} __attribute__ ((packed)) le_read_buffer_size;
+
+typedef struct {
 	uint16_t	handle;
 	uint8_t		reason;
 } __attribute__ ((packed)) hci_disconnect;
 
+typedef struct {
+	uint8_t		status;
+	uint8_t		list_size;
+} __attribute__ ((packed)) le_read_white_list_size;
 
+typedef struct {
+	uint8_t		status;
+	uint8_t		peer_bdaddr_type;
+	bdaddr_t	peer_bdaddr;
+} __attribute__ ((packed)) le_add_to_white_list;
 #endif /* HCI_H_ */

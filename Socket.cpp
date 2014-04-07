@@ -19,7 +19,7 @@
 
 Socket::Socket(int fd, MainLoop *loop) : mFd(fd), mLoop(loop)
 {
-	if (mLoop)
+	if (mLoop && fd >= 0)
 		loop->addSocket(this);
 }
 
@@ -34,6 +34,8 @@ Socket::~Socket()
 void Socket::setFd(int fd)
 {
 	mFd = fd;
+	if (mFd >= 0 && mLoop)
+		mLoop->addSocket(this);
 }
 
 int Socket::write(const void *buf, size_t count)
@@ -135,4 +137,10 @@ int Socket::poll(unsigned int events, int timeout)
 
 	}
 
+}
+
+bool Socket::close()
+{
+	::close(mFd);
+	mFd = -1;
 }

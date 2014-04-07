@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <set>
 
 #include "HciDev.h"
 #include "BLEDevice.h"
@@ -10,8 +11,10 @@
 #include "MainLoop.h"
 
 typedef std::list <BLE::HciDev*> HciDevList;
-HciDevList devices;
+HciDevList hciDevices;
 
+
+bool connect_all = false;
 
 class ScanListener : public BLE::BLEScanListener {
 	virtual void onAdvertisingReport(BLE::HciDev *hciDev,
@@ -21,26 +24,21 @@ class ScanListener : public BLE::BLEScanListener {
 			const uint8_t *data,
 			size_t datalen)
 	{
-		static int foo = 0;
-
+#if 0
 		std::cout << "Got advertisement data\n";
-		printf("  type=%d\n", type);
-		printf("  from=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				from.address.b[0],
-				from.address.b[1],
-				from.address.b[2],
-				from.address.b[3],
-				from.address.b[4],
-				from.address.b[5]);
-		printf("  rssi=%d\n", rssi);
-
-		if (foo++ == 0) {
-			printf("Connecting!");
-			BLE::BLEDevice dev(hciDev, from);
-
-			BLE::HciDev * hci = devices.front();
-			hci->leConnect(&dev);
-
+		std::cout << from;
+		std::cout << "RSSI=" << rssi << "\n";
+#endif
+		BLE::BLEDevice *dev = hciDev->findDeviceByAddress(from);
+		if (dev == NULL) {
+			std::cout << "Connecting to: " << from << "\n";
+			BLE::BLEDevice *dev = new BLE::BLEDevice(hciDev, from);
+			dev->connect();
+		} else {
+			if (dev->getState() == BLE::BLEDevice::DISCONNECTED) {
+				std::cout << "Reconnecting to: " << dev->getAddress() << "\n";
+				dev->connect();
+			}
 		}
 	}
 };
@@ -77,7 +75,14 @@ int main(int argc, char *argv[])
 		case 's':
 			scan = true;
 			break;
+		case 'a':
+			connect_all = true;
 		}
+	}
+
+	if (!scan && !connect) {
+		printf("Whatchawanttodo?\n");
+		return 1;
 	}
 
 	if (random)
@@ -88,7 +93,7 @@ int main(int argc, char *argv[])
 			BLE::HciDev *dev = new BLE::HciDev(i++, &mainloop);
 			if (dev->open()) {
 				dev->devInfo();
-				devices.push_back(dev);
+				hciDevices.push_back(dev);
 			} else {
 				delete dev;
 				break;
@@ -98,32 +103,33 @@ int main(int argc, char *argv[])
 		BLE::HciDev *dev = new BLE::HciDev(0, &mainloop);
 		if (dev->open()) {
 			dev->devInfo();
-			devices.push_back(dev);
+			hciDevices.push_back(dev);
 		} else {
 			delete dev;
 			return 1;
 		}
 	}
 
-	for (HciDevList::iterator i = devices.begin();
-			i != devices.end();
+	for (HciDevList::iterator i = hciDevices.begin();
+			i != hciDevices.end();
 			++i)
 	{
 		BLE::HciDev *dev = *i;
-		dev->down();
-		dev->up();
+//		dev->down();
+//		dev->up();
+		dev->leScanEnable(false, true);
+		dev->leCancelConnection();
+		dev->leClearWhiteList();
 
 		if (scan) {
 			dev->leSetScanParameters(BLE::HciDev::ACTIVE, 0x12, 0x12, BLE::BLEAddress::PUBLIC, BLE::HciDev::ALL);
 			dev->setScanListener(&scanListener);
 			dev->leScanEnable(true, true);
-		} else {
-			dev->leScanEnable(false, true);
 		}
 	}
 
 	if (connect) {
-		BLE::HciDev *dev = devices.front();
+		BLE::HciDev *dev = hciDevices.front();
 		BLE::BLEDevice ble(dev, addr);
 		ble.connect();
 	}

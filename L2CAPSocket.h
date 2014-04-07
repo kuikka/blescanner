@@ -13,14 +13,14 @@
 
 namespace BLE {
 
-class BLEDevice;
+class BLEGATT;
 
 class L2CAPSocket: public Socket
 {
 public:
-	L2CAPSocket(BLEDevice *bleDev);
+	L2CAPSocket(BLEGATT *gatt, MainLoop *mainloop);
 	virtual ~L2CAPSocket();
-	bool connect();
+	bool connect(const BLEAddress &address);
 
 public:
 	virtual bool wantToWrite();
@@ -30,7 +30,7 @@ public:
 	virtual bool onPollError();
 
 protected:
-	BLEDevice *mDev;
+	BLEGATT *mGatt;
 };
 
 } /* namespace BLE */

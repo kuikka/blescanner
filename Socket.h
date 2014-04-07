@@ -18,6 +18,7 @@ public:
 		PollIn = 1,
 		PollOut = 2,
 	} PollEvents;
+
 public:
 	Socket(int fd = -1, MainLoop *loop = NULL);
 	virtual ~Socket();
@@ -29,6 +30,7 @@ public:
 	int getOpt(int level, int optname, void *optval, unsigned int *optlen);
 	int setOpt(int level, int optname, const void *optval, unsigned int optlen);
 	int poll(unsigned int events, int timeout);
+	bool close();
 
 public:
 	int getFd() { return mFd; };

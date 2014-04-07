@@ -17,68 +17,68 @@
 
 namespace BLE {
 
-L2CAPSocket::L2CAPSocket(BLEDevice *bleDev)
-	: Socket(-1, bleDev->getHciDev()->getMainLoop()), mDev(bleDev)
+L2CAPSocket::L2CAPSocket(BLEGATT *gatt, MainLoop *mainloop)
+: Socket(-1, mainloop), mGatt(gatt)
 {
-	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+	//	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
 }
 
 L2CAPSocket::~L2CAPSocket()
 {
 }
 
-bool L2CAPSocket::connect()
+bool L2CAPSocket::connect(const BLEAddress &address)
 {
 	struct sockaddr_l2 addr;
 
-	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+	//	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
 
-	mFd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-	if (mFd < 0) {
+	int fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+	if (fd < 0) {
 		std::cout << "Could not get l2cap socket: " << ::strerror(errno) << "\n";
 		return false;
 	}
 
 	::memset(&addr, 0, sizeof(addr));
 	addr.l2_family = AF_BLUETOOTH;
-	addr.l2_bdaddr = mDev->getAddress().address;
+	addr.l2_bdaddr = address.address;
 	addr.l2_cid = 4;
-	addr.l2_bdaddr_type = mDev->getAddress().type == BLEAddress::PUBLIC ?
+	addr.l2_bdaddr_type = address.type == BLEAddress::PUBLIC ?
 			BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM;
 
-	int ret = ::connect(mFd, (struct sockaddr *) &addr, sizeof(addr));
+	int ret = ::connect(fd, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0) {
 		std::cout << "Could not connect l2cap socket: " << ::strerror(errno) << "\n";
-		::close(mFd);
-		mFd = -1;
+		::close(fd);
 		return false;
 	}
+	setFd(fd);
 	return true;
 }
 
 bool L2CAPSocket::wantToWrite()
 {
-
+	return mGatt->wantToWrite();
 }
 
 bool L2CAPSocket::wantToRead()
 {
-
+	return true;
 }
 
 bool L2CAPSocket::onPollIn()
 {
-
+	return mGatt->onPollIn();
 }
 
 bool L2CAPSocket::onPollOut()
 {
-
+	return mGatt->onPollOut();
 }
 
 bool L2CAPSocket::onPollError()
 {
-
+	return false;
 }
 
 
