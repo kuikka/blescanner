@@ -6,6 +6,7 @@
  */
 #include <stdio.h>
 #include "BLEDevice.h"
+#include "utils.h"
 
 namespace BLE {
 
@@ -26,7 +27,7 @@ BLEDevice::~BLEDevice()
 bool BLEDevice::connect()
 {
 	mState = CONNECTING;
-	return mHciDev->leConnect(this);
+	return mHciDev->leConnectViaWhiteList(this);
 }
 
 bool BLEDevice::disconnect()
@@ -62,7 +63,7 @@ bool BLEDevice::onConnection(uint8_t status, uint16_t handle)
 
 bool BLEDevice::onDisconnection(uint8_t status, uint8_t reason)
 {
-	std::cout << "BLEDevice got disconnected\n";
+	std::cout << "BLEDevice: got disconnected reason=" << hex(reason) << std::endl;
 	mConnected = false;
 	mHandle = 0xFFFF;
 	mGatt.disconnect();

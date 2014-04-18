@@ -9,6 +9,7 @@
 #include "BLEDevice.h"
 #include "BLEGATT.h"
 #include "ByteBuffer.h"
+#include "utils.h"
 
 #define ATT_OP_ERROR			0x01
 #define ATT_OP_MTU_REQ			0x02
@@ -67,25 +68,18 @@ bool BLEGATT::discoverAll()
 {
 	mDiscovering = true;
 
-	return opReadByGroupReq(0x0001, 0xFFFF, UUID(0x2800));
+	return opReadByGroupTypeReq(0x0001, 0xFFFF, UUID(0x2800));
 }
 
-bool BLEGATT::opReadByGroupReq(uint16_t startHandle, uint16_t endHandle, const UUID & uuid)
+bool BLEGATT::opReadByGroupTypeReq(uint16_t startHandle, uint16_t endHandle, const UUID & uuid)
 {
 	ByteBuffer bb(21); // Max
 	bb.put((uint8_t)ATT_OP_READ_BY_GROUP_REQ);
 	bb.put(startHandle);
 	bb.put(endHandle);
 	bb.put(uuid);
-#if 0
-	buf[1] = 0x01;
-	buf[2] = 0x00;
-	buf[3] = 0xFF;
-	buf[4] = 0xFF;
-	buf[5] = 0x00;
-	buf[6] = 0x28;
-	return mL2CAP.write(buf, sizeof(buf));
-#endif
+	mReqType = uuid;
+
 	return bb.write(&mL2CAP);
 }
 
@@ -94,6 +88,7 @@ bool BLEGATT::opReadByGroupReq(uint16_t startHandle, uint16_t endHandle, const U
 void BLEGATT::readFromSocket()
 {
 	uint8_t buf[GATT_MTU];
+	uint16_t end_handle;
 
 	int ret = mL2CAP.read(buf, sizeof(buf), true);
 	if (ret <= 0)
@@ -104,20 +99,63 @@ void BLEGATT::readFromSocket()
 	std::cout << "GATT: Got " << ret << " bytes\n";
 
 	uint8_t opcode = bb.get8();
+
 	switch (opcode) {
 		case ATT_OP_READ_BY_GROUP_RESP:
+		{
 			std::cout << "Read by group response\n";
 			uint8_t length = bb.get8();
 			std::cout << "  Got attributes, length=" << (int)length << "\n";
 			if (length == 6) {
 				unsigned nr_data = ((ret - 2) / length);
 				while (nr_data--) {
-					printf("    Attribute handle 0x%04x\n", bb.get16());
-					printf("    End handle 0x%04x\n", bb.get16());
-					printf("    Value 0x%04x\n", bb.get16());
+					ATT_entry att;
+					att.handle = bb.get16();
+					att.last_handle_in_group = bb.get16();
+					att.value.push_back(bb.get8());
+					att.value.push_back(bb.get8());
+					att.type = mReqType;
+					end_handle = att.last_handle_in_group;
+
+					printf("    Attribute handle 0x%04x\n", att.handle);
+					printf("    End handle 0x%04x\n", att.last_handle_in_group);
+					printf("    Value 0x%02x%02x\n", att.value[1], att.value[0]);
+					std::cout << "    Type=" << att.type << "\n";
 				}
 			}
-			break;
+			else if (length == 20) {
+				unsigned nr_data = ((ret - 2) / length);
+				while (nr_data--) {
+					ATT_entry att;
+					att.handle = bb.get16();
+					att.last_handle_in_group = bb.get16();
+					att.type = mReqType;
+					end_handle = att.last_handle_in_group;
+
+					for (unsigned i = 0; i < 16; i++) {
+						att.value.push_back(bb.get8());
+					}
+				}
+			}
+
+			if (end_handle != 0xFFFF) {
+				opReadByGroupTypeReq(end_handle + 1, 0xFFFF, mReqType);
+			}
+		}
+		break;
+		case ATT_OP_ERROR:
+		{
+			std::cout << "GATT: Error, opcode=" << hex(bb.get8())
+					<< " handle=" << hex(bb.get16())
+					<< " error=" << hex(bb.get8())
+					<< std::endl;
+		}
+
+		default:
+		{
+			std::cout << "GATT: Got opcode " << hex(opcode) << std::endl;
+		}
+		break;
 
 	}
 

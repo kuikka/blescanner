@@ -206,7 +206,6 @@ typedef struct {
 } __attribute__ ((packed)) le_read_white_list_size;
 
 typedef struct {
-	uint8_t		status;
 	uint8_t		peer_bdaddr_type;
 	bdaddr_t	peer_bdaddr;
 } __attribute__ ((packed)) le_add_to_white_list;

@@ -24,10 +24,10 @@ class ScanListener : public BLE::BLEScanListener {
 			const uint8_t *data,
 			size_t datalen)
 	{
-#if 0
-		std::cout << "Got advertisement data\n";
+#if 1
+		std::cout << "Got advertisement data ";
 		std::cout << from;
-		std::cout << "RSSI=" << rssi << "\n";
+		std::cout << " RSSI=" << (int) rssi << "\n";
 #endif
 		BLE::BLEDevice *dev = hciDev->findDeviceByAddress(from);
 		if (dev == NULL) {

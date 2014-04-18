@@ -76,9 +76,7 @@ bool HciRequest::writeToSocket(HciSocket *sock)
 		std::cout << "HciRequest::writeToSocket: Failed to send command\n";
 		return false;
 	}
-	std::cout << "Wrote " << ret << " bytes\n";
-
-
+//	std::cout << "Wrote " << ret << " bytes\n";
 	mReqWritten = true;
 }
 

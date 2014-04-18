@@ -14,17 +14,12 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#if 0
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
-#endif
-
 #include "MainLoop.h"
 #include "HciDev.h"
 #include "HciRequest.h"
 #include "hci.h"
 #include "BLEDevice.h"
+#include "utils.h"
 
 namespace BLE {
 
@@ -195,8 +190,10 @@ void HciDev::setScanListener(BLEScanListener *listener)
 
 bool HciDev::submit(HciRequest *req)
 {
+#if 0
 	printf("HciDev: submitted 0x%04x. Queue size before: %lu. Current request = %p\n", req->getOpcode(),
 			mRequestQueue.size(), mCurrentRequest);
+#endif
 
 	mRequestQueue.push(req);
 
@@ -298,7 +295,6 @@ bool HciDev::readFromSocket()
 					len -= sizeof(evt_cmd_complete);
 
 					if (mCurrentRequest && mCurrentRequest->getOpcode() == cc->opcode) {
-						printf("Completing current request 0x%04x\n", cc->opcode);
 						completeCurrentRequest(ptr, len);
 					}
 					onCommandCompleted(cc->opcode, ptr, len);
@@ -365,6 +361,8 @@ void HciDev::handleAdvertisingReport(const uint8_t *data, size_t len)
 
 void HciDev::completeCurrentRequest(const uint8_t *ptr, size_t len)
 {
+//	printf("HciDev: completed 0x%04x\n", mCurrentRequest->getOpcode());
+
 	mCurrentRequest->complete(ptr, len);
 	delete mCurrentRequest;
 	mCurrentRequest = NULL;
@@ -384,11 +382,13 @@ bool HciDev::leConnect(BLEDevice *dev, bool useWhiteList)
 
 	conn.scan_interval = 4;
 	conn.scan_window = 4;
-	conn.min_interval = 0x000F;
-	conn.max_interval = 0x000F;
+	conn.min_interval = 0x001F;
+	conn.max_interval = 0x004F;
 	conn.supervision_timeout = 0xc80;
 	conn.min_ce_length = 1;
 	conn.max_ce_length = 1;
+	conn.latency = 8;
+
 	if (useWhiteList) {
 		conn.initiator_filter = 1;
 	} else {
@@ -458,24 +458,29 @@ void HciDev::onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t dat
 		case HCI_OP_LE_READ_BUFFER_SIZE:
 		{
 			le_read_buffer_size *bs = (le_read_buffer_size*) data;
-			std::cout << "Got LE buffer size, data_packet_len=" << bs->data_packet_len << " num_data_packets=" << (unsigned)bs->nr_data_packets << "\n";
+			std::cout << "HciDev: Got LE buffer size, data_packet_len=" << bs->data_packet_len << " num_data_packets=" << (unsigned)bs->nr_data_packets << "\n";
 		}
 		break;
 		case HCI_OP_LE_READ_WHITE_LIST_SIZE:
 		{
 			le_read_white_list_size *wlz = (le_read_white_list_size*) data;
-			std::cout << "Got LE white list size, white_list_size=" << (unsigned)wlz->list_size << "\n";
+			std::cout << "HciDev: Got LE white list size, white_list_size=" << (unsigned)wlz->list_size << "\n";
 			mWhiteListSize = wlz->list_size;
 		}
 		break;
 		case HCI_OP_LE_CLEAR_WHITE_LIST:
 		{
-			std::cout << "White list cleared\n";
+			std::cout << "HciDev: White list cleared\n";
 		}
 		break;
 		case HCI_OP_LE_ADD_TO_WHITE_LIST:
 		{
-			std::cout << "Added to white list\n";
+			std::cout << "HciDev: Added to white list status=" << hex(data[0]) << "\n";
+		}
+		break;
+		case HCI_OP_LE_CREATE_CONN_CANCEL:
+		{
+			std::cout << "HciDev: Cancelled connection, status=" << hex(data[0]) << std::endl;
 		}
 		break;
 	}
@@ -507,10 +512,14 @@ void HciDev::onLEMetaEvent(uint8_t subEvent, const uint8_t *data, size_t datalen
 			evt_le_connection_complete *c = (evt_le_connection_complete*) data;
 			BLEAddress addr(c->peer_bdaddr, (BLEAddress::AddressType) c->peer_bdaddr_type);
 
-			std::cout << "EVT: Connection completed: " << addr << "\n";
+			std::cout << "EVT: Connection completed, status="
+					<< hex(c->status)
+					<< " to: " << addr << "\n";
 			BLEDevice *dev = findDeviceByAddress(addr);
 			if (dev)
 				dev->onConnection(c->status, c->handle);
+			if (c->status == 0)
+				leConnect(NULL, true);
 
 			break;
 		}
