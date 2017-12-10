@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <set>
 
+#include "config.h"
 #include "HciDev.h"
 #include "BLEDevice.h"
 #include "BLEAddress.h"
@@ -16,8 +17,8 @@ HciDevList hciDevices;
 
 bool connect_all = false;
 
-class ScanListener : public BLE::BLEScanListener {
-	virtual void onAdvertisingReport(BLE::HciDev *hciDev,
+class ScanListener : public BLE::BLEScanListener, public std::enable_shared_from_this<ScanListener>  {
+	virtual void onAdvertisingReport(BLE::HciDev &hciDev,
 			EventType type,
 			BLE::BLEAddress from,
 			int8_t rssi,
@@ -29,6 +30,7 @@ class ScanListener : public BLE::BLEScanListener {
 		std::cout << from;
 		std::cout << " RSSI=" << (int) rssi << "\n";
 #endif
+#if 0
 		BLE::BLEDevice *dev = hciDev->findDeviceByAddress(from);
 		if (dev == NULL) {
 			std::cout << "Connecting to: " << from << "\n";
@@ -40,12 +42,13 @@ class ScanListener : public BLE::BLEScanListener {
 				dev->connect();
 			}
 		}
+#endif
 	}
 };
 
 int main(int argc, char *argv[])
 {
-	ScanListener scanListener;
+	shared_ptr<ScanListener> scanListener = std::make_shared<ScanListener>();
 	MainLoop mainloop;
 	BLE::BLEAddress addr;
 	int opt;
@@ -123,7 +126,7 @@ int main(int argc, char *argv[])
 
 		if (scan) {
 			dev->leSetScanParameters(BLE::HciDev::ACTIVE, 0x12, 0x12, BLE::BLEAddress::PUBLIC, BLE::HciDev::ALL);
-			dev->setScanListener(&scanListener);
+			dev->setScanListener(scanListener);
 			dev->leScanEnable(true, true);
 		}
 	}

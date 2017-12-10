@@ -26,7 +26,7 @@ public:
 
 	int write(const void *buf, size_t count);
 	int read(void *buf, size_t count, bool single);
-	int ioctl(int request, void *buf);
+	int ioctl(unsigned long request, void *buf);
 	int getOpt(int level, int optname, void *optval, unsigned int *optlen);
 	int setOpt(int level, int optname, const void *optval, unsigned int optlen);
 	int poll(unsigned int events, int timeout);

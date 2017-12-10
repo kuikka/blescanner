@@ -44,8 +44,6 @@ protected:
 	uint16_t mOpcode;
 	int mEvent;
 	hci_cmd mCmd;
-//	uint8_t *mCmdData;
-//	size_t mCmdDataSize;
 	void *mReplyData;
 	size_t mExpectedReplyDataSize;
 	size_t mReplyDataSize;
@@ -54,6 +52,6 @@ protected:
 	CompleteCallback mCompleteCallback;
 };
 
-}; // namespace BLE
+} // namespace BLE
 
 #endif /* HCIREQUEST_H_ */

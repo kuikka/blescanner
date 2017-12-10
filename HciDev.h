@@ -9,11 +9,14 @@
 #define HCIDEV_H_
 
 #include <stdint.h>
+#include <memory>
 #include "HciSocket.h"
 #include "BLEScanListener.h"
 #include "HciRequest.h"
 #include <queue>
 #include <set>
+
+#include "config.h"
 
 class MainLoop;
 
@@ -41,6 +44,9 @@ public:
 	HciSocket* getSocket();
 	MainLoop* getMainLoop() { return mLoop; };
 
+	HciDev(const HciDev &) = delete;
+	HciDev& operator=(const HciDev &) = delete;
+
 public:
 	bool leSetScanParameters(ScanType scanType,
 			uint16_t scanInterval,
@@ -50,7 +56,7 @@ public:
 
 	bool leScanEnable(bool enable, bool filterDuplicates);
 
-	bool leConnect(BLEDevice *dev = NULL, bool useWhiteList = false);
+	bool leConnect(BLEDevice *dev = nullptr, bool useWhiteList = false);
 	bool leDisconnect(BLEDevice *bleDev);
 	bool leCancelConnection();
 	bool leAddToWhitelist();
@@ -61,7 +67,7 @@ public:
 	bool leConnectViaWhiteList(BLEDevice *dev);
 
 public:
-	void setScanListener(BLEScanListener *listener);
+	void setScanListener(std::shared_ptr<BLEScanListener> listener);
 	bool open();
 	bool up();
 	bool down();
@@ -100,7 +106,7 @@ public:
 protected:
 	HciSocket *mSocket;
 	int mDevId;
-	BLEScanListener *mScanListener;
+	list< std::shared_ptr<BLEScanListener> > mScanListeners;
 	MainLoop *mLoop;
 	typedef std::queue<HciRequest*> RequestQueue;
 	RequestQueue mRequestQueue;
@@ -114,5 +120,5 @@ protected:
 	friend class HciSocket;
 };
 
-};
+}
 #endif /* HCIDEV_H_ */

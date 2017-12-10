@@ -26,13 +26,15 @@ public:
 	} EventType;
 
 public:
-	virtual void onAdvertisingReport(HciDev *hciDev,
+	virtual ~BLEScanListener() {};
+	virtual void onAdvertisingReport(HciDev &hciDev,
 			EventType type,
 			BLE::BLEAddress from,
 			int8_t rssi,
 			const uint8_t *data,
 			size_t datalen) = 0;
 };
-};
+
+} // namespaec BLE
 
 #endif /* BLESCANLISTENER_H_ */

@@ -14,16 +14,11 @@
 #include "HciDev.h"
 #include "HciSocket.h"
 
-#if 0
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
-#endif
-
 namespace BLE {
 
 HciRequest::HciRequest(uint16_t opcode) : mOpcode(opcode), mEvent(0),
-		mExpectedReplyDataSize(0), mReplyDataSize(0), mReplyData(NULL), mReqWritten(false),
+		mReplyData(NULL),
+		mExpectedReplyDataSize(0), mReplyDataSize(0), mReqWritten(false),
 		mCompleteCallback(NULL)
 {
 	::bzero(&mCmd, sizeof(mCmd));
@@ -53,6 +48,7 @@ void HciRequest::setExpectedReplyLength(size_t count)
 
 bool HciRequest::executeSync(HciDev *dev)
 {
+	return false;
 }
 
 bool HciRequest::wantToWrite()
@@ -78,6 +74,8 @@ bool HciRequest::writeToSocket(HciSocket *sock)
 	}
 //	std::cout << "Wrote " << ret << " bytes\n";
 	mReqWritten = true;
+
+	return true;
 }
 
 void HciRequest::complete(const uint8_t *reply, size_t len)
@@ -87,4 +85,4 @@ void HciRequest::complete(const uint8_t *reply, size_t len)
 }
 
 
-}; // namespace BLE
+} // namespace BLE

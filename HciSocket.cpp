@@ -42,6 +42,8 @@ bool HciSocket::setFilter()
 
 	if (this->setOpt(SOL_HCI, HCI_FILTER, &nf, sizeof(nf)) < 0)
 		return false;
+
+	return true;
 }
 
 bool HciSocket::wantToWrite()
@@ -56,7 +58,7 @@ bool HciSocket::wantToRead()
 
 bool HciSocket::onPollIn()
 {
-	mDev->onPollIn();
+	return mDev->onPollIn();
 }
 
 bool HciSocket::onPollOut()
@@ -69,4 +71,4 @@ bool HciSocket::onPollError()
 	mDev->onPollError();
 }
 
-}; // namespace BLE
+} // namespace BLE

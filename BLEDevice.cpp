@@ -26,13 +26,13 @@ BLEDevice::~BLEDevice()
 
 bool BLEDevice::connect()
 {
-	mState = CONNECTING;
+	mState = State::CONNECTING;
 	return mHciDev->leConnectViaWhiteList(this);
 }
 
 bool BLEDevice::disconnect()
 {
-	mState == DISCONNECTING;
+	mState = State::DISCONNECTING;
 	return mHciDev->leDisconnect(this);
 }
 
@@ -52,7 +52,7 @@ bool BLEDevice::onConnection(uint8_t status, uint16_t handle)
 {
 	if (status == 0) {
 		printf("BLEDevice: Got connected! Handle=%d\n", handle);
-		mState = CONNECTED;
+		mState = State::CONNECTED;
 		mConnected = true;
 		mHandle = handle;
 		mGatt.connect();
@@ -63,15 +63,15 @@ bool BLEDevice::onConnection(uint8_t status, uint16_t handle)
 
 bool BLEDevice::onDisconnection(uint8_t status, uint8_t reason)
 {
-	std::cout << "BLEDevice: got disconnected reason=" << hex(reason) << std::endl;
+	std::cout << "BLEDevice: got disconnected status=" << hex(status) << " reason=" << hex(reason) << std::endl;
 	mConnected = false;
 	mHandle = 0xFFFF;
 	mGatt.disconnect();
-	mState = DISCONNECTED;
+	mState = State::DISCONNECTED;
 	return true;
 }
 
-BLEDevice::DeviceState BLEDevice::getState()
+BLEDevice::State BLEDevice::getState()
 {
 	return mState;
 }

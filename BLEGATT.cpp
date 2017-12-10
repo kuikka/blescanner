@@ -150,6 +150,7 @@ void BLEGATT::readFromSocket()
 					<< " error=" << hex(bb.get8())
 					<< std::endl;
 		}
+		break;
 
 		default:
 		{
@@ -164,16 +165,17 @@ void BLEGATT::readFromSocket()
 bool BLEGATT::onPollIn()
 {
 	readFromSocket();
+	return true;
 }
 
 bool BLEGATT::onPollOut()
 {
-
+	return false;
 }
 
 bool BLEGATT::wantToWrite()
 {
-
+	return false;
 }
 
 } /* namespace BLE */

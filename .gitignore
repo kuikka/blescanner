@@ -23,3 +23,6 @@ blescanner
 
 # Deps
 *.d
+.*.swp
+build/
+tags

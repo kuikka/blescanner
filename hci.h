@@ -128,7 +128,7 @@ typedef struct {
 
 typedef struct {
 	uint8_t		subevent;
-	uint8_t		data[0];
+	uint8_t		data[1];
 } __attribute__ ((packed)) evt_le_meta_event;
 
 

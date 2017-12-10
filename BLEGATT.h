@@ -16,13 +16,15 @@ namespace BLE {
 
 class BLEDevice;
 
-typedef struct
+struct ATT_entry
 {
+	ATT_entry() : handle(0), type(), value(), last_handle_in_group(0) {};
+
 	uint16_t				handle;
 	UUID 					type;
-	std::vector<uint8_t>	value;
+	std::vector<uint8_t>			value;
 	uint16_t				last_handle_in_group;
-} ATT_entry;
+};
 
 typedef std::map<uint16_t, ATT_entry> ATTMap;
 
@@ -45,8 +47,8 @@ protected:
 	void readFromSocket();
 
 protected:
-	L2CAPSocket mL2CAP;
 	BLEDevice *mDev;
+	L2CAPSocket mL2CAP;
 	bool mDiscovering;
 	ATTMap mATT;
 	UUID mReqType;

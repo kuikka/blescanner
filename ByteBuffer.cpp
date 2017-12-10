@@ -13,8 +13,11 @@ ByteBuffer::ByteBuffer(size_t capacity) : mCapacity(capacity), mUsed(0), mAlloca
 	mBuffer = new uint8_t[mCapacity];
 }
 
-ByteBuffer::ByteBuffer(uint8_t *buf, size_t capacity) : mCapacity(capacity),
-		mAllocated(false), mUsed(0), mBuffer(buf)
+ByteBuffer::ByteBuffer(uint8_t *buf, size_t capacity)
+		: mBuffer(buf)
+		, mCapacity(capacity)
+		, mUsed(0)
+		, mAllocated(false)
 {
 
 }

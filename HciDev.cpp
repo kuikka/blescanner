@@ -24,10 +24,10 @@
 namespace BLE {
 
 HciDev::HciDev(int devId, MainLoop *loop)
-: mDevId(devId), mSocket(NULL), mLoop(loop),
-  mCurrentRequest(NULL), mScanning(false), mConnecting(false), mWhiteListSize(0)
+: mSocket(nullptr), mDevId(devId), mLoop(loop),
+  mCurrentRequest(nullptr), mScanning(false), mConnecting(false), mWhiteListSize(0)
 {
-	printf("%s this=%p\n", __PRETTY_FUNCTION__, this);
+	printf("%s this=%p\n", __PRETTY_FUNCTION__, (void*)this);
 }
 
 HciDev::~HciDev()
@@ -166,7 +166,6 @@ bool HciDev::leScanEnable(bool enable, bool filterDuplicates)
 
 	HciRequest *req = new HciRequest(HCI_OP_LE_SET_SCAN_ENABLE);
 	le_set_scan_enable params;
-	uint8_t reply = 42;
 
 	params.enable = enable ? 1 : 0;
 	params.filter_dup = filterDuplicates ? 1 : 0;
@@ -183,9 +182,9 @@ HciSocket* HciDev::getSocket()
 	return mSocket;
 }
 
-void HciDev::setScanListener(BLEScanListener *listener)
+void HciDev::setScanListener(std::shared_ptr<BLEScanListener> listener)
 {
-	mScanListener = listener;
+	mScanListeners.push_back(listener);
 }
 
 bool HciDev::submit(HciRequest *req)
@@ -239,8 +238,6 @@ bool HciDev::readFromSocket()
 	//	std::cout << __PRETTY_FUNCTION__ << "\n";
 
 	unsigned char buf[HCI_MAX_EVENT_SIZE], *ptr;
-
-	int to = 10000;
 
 	//	remote_name_req_cp *cp;
 	int len;
@@ -335,15 +332,17 @@ bool HciDev::readFromSocket()
 
 }
 
-void HciDev::handleAdvertisingReport(const uint8_t *data, size_t len)
+void HciDev::handleAdvertisingReport(const uint8_t *data, size_t /* len */)
 {
 //	printf("%s\n", __FUNCTION__);
 
-	if (!mScanListener)
+	if (mScanListeners.empty())
 		return;
 
 	unsigned num_reports = data[0];
 	const uint8_t *ptr = &data[1];
+
+	// TODO: Use length, write parser
 
 	while (num_reports--) {
 		BLEScanListener::EventType type = (BLEScanListener::EventType) *ptr++;
@@ -355,7 +354,9 @@ void HciDev::handleAdvertisingReport(const uint8_t *data, size_t len)
 		ptr += length;
 		int8_t rssi = (int8_t) *((int8_t*)ptr);
 
-		mScanListener->onAdvertisingReport(this, type, from, rssi, dataPtr, length);
+		for (auto scanListener : mScanListeners) {
+			scanListener->onAdvertisingReport(*this, type, from, rssi, dataPtr, length);
+		}
 	}
 }
 
@@ -410,6 +411,7 @@ bool HciDev::leConnectViaWhiteList(BLEDevice *dev)
 	leAddToWhitelist(dev->getAddress());
 	leConnect(NULL, true);
 
+	return true;
 }
 
 bool HciDev::leDisconnect(BLEDevice *bleDev)
@@ -451,7 +453,7 @@ bool HciDev::leClearWhiteList()
 
 }
 
-void HciDev::onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t dataLen)
+void HciDev::onCommandCompleted(uint16_t opCode, const uint8_t *data, size_t __attribute__((unused))dataLen)
 {
 //	std::cout << "Command completed: " << opCode << "\n";
 	switch (opCode) {
@@ -538,7 +540,7 @@ void HciDev::addDevice(BLEDevice *dev)
 	mDevices.insert(dev);
 }
 
-void HciDev::removeDevice(BLEDevice *dev)
+void HciDev::removeDevice(BLEDevice* /* dev */)
 {
 
 }
@@ -570,4 +572,4 @@ BLEDevice* HciDev::findDeviceByAddress(const BLEAddress &addr)
 	}
 	return NULL;
 }
-}; // namespace BLE
+} // namespace BLE

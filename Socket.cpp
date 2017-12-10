@@ -80,7 +80,7 @@ int Socket::read(void *buf, size_t count, bool single)
 	return bytesRead;
 }
 
-int Socket::ioctl(int request, void *buf)
+int Socket::ioctl(unsigned long request, void *buf)
 {
 	int ret = ::ioctl(mFd, request, buf);
 	if (ret < 0) {
@@ -141,6 +141,7 @@ int Socket::poll(unsigned int events, int timeout)
 
 bool Socket::close()
 {
-	::close(mFd);
+	int ret = ::close(mFd);
 	mFd = -1;
+	return ret == 0;
 }

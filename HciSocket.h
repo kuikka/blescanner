@@ -36,5 +36,5 @@ protected:
 
 };
 
-};
+}
 #endif /* REQUESTSOCKET_H_ */

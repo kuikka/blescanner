@@ -46,7 +46,8 @@ public:
 		for (unsigned i = 0; i < 6; i++)
 			this->address.b[i] = b[i];
 	}
-	BLEAddress(const bdaddr_t & addr, AddressType type = PUBLIC) : type(type), address(addr)
+
+	BLEAddress(const bdaddr_t & addr, AddressType type = PUBLIC) : address(addr),type(type)
 	{};
 
 	BLEAddress(const char* str, AddressType type = PUBLIC) : type(type)
